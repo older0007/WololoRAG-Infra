@@ -1,0 +1,63 @@
+# ==============================================================================
+# WololoRAG-Infra: Shared Database Stack (PostgreSQL + Adminer + Qdrant)
+#
+# Architectural Role:
+#   Both `WololoRAG` (Indexer) and `WololoRAG-MCP` (LLM Search Server) connect
+#   to these shared databases via `localhost` (or Docker network) configured in
+#   each service's `.env` file.
+#
+# Web Dashboards once running (`docker compose up -d`):
+#   - Qdrant Vector DB UI: http://localhost:6333/dashboard
+#   - Adminer SQL Web UI:  http://localhost:8081  (System: PostgreSQL, Server: postgres)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Relational State Database (PostgreSQL 16)
+  #    Stores article metadata, topics, sync status, `vector_ids`, and `error_str`.
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: wololo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wololo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wololo_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-wololo_rag}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wololo} -d ${POSTGRES_DB:-wololo_rag}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # 2. Lightweight SQL Web UI (Adminer)
+  #    Lets you inspect the `articles` table, statuses, and `error_str` visually.
+  # ----------------------------------------------------------------------------
+  adminer:
+    image: adminer:4
+    container_name: wololo-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+
+  # ----------------------------------------------------------------------------
+  # 3. Vector Database (Qdrant)
+  #    Stores chunk embeddings and metadata payloads; provides Web Dashboard UI.
+  # ----------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: wololo-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HTTP_PORT:-6333}:6333"   # REST API + Web Dashboard (/dashboard)
+      - "${QDRANT_GRPC_PORT:-6334}:6334"   # High-speed gRPC API
+    volumes:
+      - ./data/qdrant:/qdrant/storage

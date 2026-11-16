@@ -1,0 +1,10 @@
+# ==============================================================================
+# WololoRAG-Infra .gitignore
+# Prevents local database volumes and environment secrets from entering Git.
+# ==============================================================================
+
+.env
+data/
+postgres_data/
+qdrant_storage/
+.DS_Store
